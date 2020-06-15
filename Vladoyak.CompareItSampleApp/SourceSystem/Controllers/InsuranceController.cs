@@ -1,7 +1,9 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using SourceSystem.Models;
+using SourceSystem.Rabbit;
 using SourceSystem.Services;
 using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -13,19 +15,16 @@ namespace SourceSystem.Controllers
     public class InsuranceController : Controller
     {
         private readonly IInsuranceService _insuranceService;
+        private readonly IInsuranceAddingSender _insuranceAddingSender;
 
-        public InsuranceController(IInsuranceService insuranceService)
+        public InsuranceController(IInsuranceService insuranceService, IInsuranceAddingSender insuranceAddingSender)
         {
             _insuranceService = insuranceService;
+            _insuranceAddingSender = insuranceAddingSender;
+            Generate();
         }
 
-        public IActionResult Index()
-        {
-            return View();
-        }
-
-        [HttpGet]
-        public IEnumerable<Insurance> Get()
+        public void Generate()
         {
             var insurance = new Insurance
             {
@@ -41,8 +40,17 @@ namespace SourceSystem.Controllers
             Insert(insurance);
             Insert(insurance2);
             //Delete(2);
+        }
 
-            return _insuranceService.Get();
+        public IActionResult Index()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public IActionResult Get()
+        {
+            return Ok(_insuranceService.Get());
         }
 
         [HttpGet("{id}")]        
@@ -55,11 +63,15 @@ namespace SourceSystem.Controllers
                 return NotFound();
         }
 
-        public IActionResult Insert(Insurance insurance)
+        [HttpPost]
+        public IActionResult Insert([FromBody]Insurance insurance)
         {
             int addedId = _insuranceService.Add(insurance);
             if (addedId != default)
+            {
+                _insuranceAddingSender.SendInsurance(insurance);
                 return CreatedAtAction("FindOne", _insuranceService.Get(addedId));
+            }
             else
                 return BadRequest();
         }
